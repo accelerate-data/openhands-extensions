@@ -28,6 +28,8 @@ Environment Variables:
     LLM_MODEL: Language model to use (default: anthropic/claude-sonnet-4-5-20250929)
     LLM_BASE_URL: Optional base URL for LLM API
     LLM_EXTRA_BODY: Optional JSON object of extra request-body fields for the LLM
+    LLM_EXTRA_HEADERS: Optional JSON object of extra HTTP headers for the LLM
+    LLM_CAPABILITY_OVERRIDES: Optional JSON object of SDK model capability overrides
     MAX_ITERATIONS: Optional cap on agent iterations per review run
     GITHUB_TOKEN: GitHub token for API access (required)
     PR_NUMBER: Pull request number (required)
@@ -176,6 +178,19 @@ def _get_required_env(name: str) -> str:
     value = os.getenv(name)
     if not value:
         raise ValueError(f"{name} environment variable is required")
+    return value
+
+
+def _get_json_object_env(name: str) -> dict[str, Any]:
+    raw = os.getenv(name, "")
+    if not raw:
+        return {}
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{name} is not valid JSON: {exc}") from exc
+    if not isinstance(value, dict):
+        raise ValueError(f"{name} must be a JSON object")
     return value
 
 
@@ -952,6 +967,8 @@ def validate_environment() -> dict[str, Any]:
         "model": os.getenv("LLM_MODEL", "anthropic/claude-sonnet-4-5-20250929"),
         "base_url": os.getenv("LLM_BASE_URL"),
         "extra_body": extra_body,
+        "extra_headers": _get_json_object_env("LLM_EXTRA_HEADERS"),
+        "capability_overrides": _get_json_object_env("LLM_CAPABILITY_OVERRIDES"),
         "max_iterations": max_iterations,
         "require_evidence": _get_bool_env("REQUIRE_EVIDENCE"),
         "collect_feedback": _get_bool_env("COLLECT_FEEDBACK"),
@@ -1106,6 +1123,10 @@ def create_conversation(
         llm_config["base_url"] = config["base_url"]
     if config["extra_body"]:
         llm_config["litellm_extra_body"] = config["extra_body"]
+    if config["extra_headers"]:
+        llm_config["extra_headers"] = config["extra_headers"]
+    if config["capability_overrides"]:
+        llm_config["capability_overrides"] = config["capability_overrides"]
 
     llm = LLM(**llm_config)
 

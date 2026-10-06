@@ -49,6 +49,19 @@ inputs:
             models that think by default. Ignored in ACP mode.
         required: false
         default: ''
+    llm-extra-headers:
+        description: >
+            JSON object of extra HTTP headers sent with every LLM request
+            (optional), e.g. a gateway's session or routing header.
+        required: false
+        default: ''
+    llm-capability-overrides:
+        description: >
+            JSON object of OpenHands SDK model capability overrides (optional),
+            e.g. '{"supports_responses_api": true}' for a model served only on
+            the Responses API.
+        required: false
+        default: ''
     max-iterations:
         description: >
             Maximum agent iterations (model call + tool action) for the review
@@ -275,6 +288,8 @@ runs:
               LLM_MODEL: ${{ steps.select-model.outputs.selected_model }}
               LLM_BASE_URL: ${{ inputs.llm-base-url }}
               LLM_EXTRA_BODY: ${{ inputs.llm-extra-body }}
+              LLM_EXTRA_HEADERS: ${{ inputs.llm-extra-headers }}
+              LLM_CAPABILITY_OVERRIDES: ${{ inputs.llm-capability-overrides }}
               MAX_ITERATIONS: ${{ inputs.max-iterations }}
               REVIEW_STYLE: ${{ inputs.review-style }}
               REQUIRE_EVIDENCE: ${{ inputs.require-evidence }}

@@ -34,6 +34,23 @@ inputs:
     llm-api-key:
         description: LLM API key (required)
         required: true
+    llm-extra-headers:
+        description: >
+            JSON object of extra HTTP headers sent with every LLM request
+            (optional), e.g. a gateway's session or routing header.
+        required: false
+        default: ''
+    llm-capability-overrides:
+        description: >
+            JSON object of OpenHands SDK model capability overrides (optional),
+            e.g. '{"supports_responses_api": true}' for a model served only on
+            the Responses API.
+        required: false
+        default: ''
+    extensions-version:
+        description: Ref of this repository to run the release-notes scripts from
+        required: false
+        default: main
     github-token:
         description: GitHub token for API access (required)
         required: true
@@ -61,8 +78,8 @@ runs:
         - name: Checkout extensions repository
           uses: actions/checkout@v4
           with:
-              repository: OpenHands/extensions
-              ref: main
+              repository: accelerate-data/openhands-extensions
+              ref: ${{ inputs.extensions-version }}
               path: extensions
               sparse-checkout: plugins/release-notes
 
@@ -83,6 +100,8 @@ runs:
               LLM_MODEL: ${{ inputs.llm-model }}
               LLM_BASE_URL: ${{ inputs.llm-base-url }}
               LLM_API_KEY: ${{ inputs.llm-api-key }}
+              LLM_EXTRA_HEADERS: ${{ inputs.llm-extra-headers }}
+              LLM_CAPABILITY_OVERRIDES: ${{ inputs.llm-capability-overrides }}
               GITHUB_TOKEN: ${{ inputs.github-token }}
               TAG: ${{ inputs.tag }}
               PREVIOUS_TAG: ${{ inputs.previous-tag }}

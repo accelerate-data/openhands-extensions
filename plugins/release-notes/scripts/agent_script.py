@@ -19,6 +19,7 @@ Environment Variables:
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import sys
@@ -49,6 +50,19 @@ def _get_required_env(name: str) -> str:
     return value
 
 
+def _get_json_object_env(name: str) -> dict[str, Any]:
+    raw = os.getenv(name, "")
+    if not raw:
+        return {}
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{name} is not valid JSON: {exc}") from exc
+    if not isinstance(value, dict):
+        raise ValueError(f"{name} must be a JSON object")
+    return value
+
+
 def _get_bool_env(name: str, default: bool = False) -> bool:
     value = os.getenv(name)
     if value is None:
@@ -61,6 +75,8 @@ def validate_environment() -> dict[str, Any]:
     return {
         "model": os.getenv("LLM_MODEL", "anthropic/claude-sonnet-4-5-20250929"),
         "base_url": os.getenv("LLM_BASE_URL", ""),
+        "extra_headers": _get_json_object_env("LLM_EXTRA_HEADERS"),
+        "capability_overrides": _get_json_object_env("LLM_CAPABILITY_OVERRIDES"),
         "api_key": _get_required_env("LLM_API_KEY"),
         "github_token": _get_required_env("GITHUB_TOKEN"),
         "tag": _get_required_env("TAG"),
@@ -81,6 +97,10 @@ def create_agent(config: dict[str, Any]) -> Agent:
     }
     if config["base_url"]:
         llm_config["base_url"] = config["base_url"]
+    if config["extra_headers"]:
+        llm_config["extra_headers"] = config["extra_headers"]
+    if config["capability_overrides"]:
+        llm_config["capability_overrides"] = config["capability_overrides"]
 
     llm = LLM(**llm_config)
 
