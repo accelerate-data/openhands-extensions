@@ -181,6 +181,35 @@ def _get_required_env(name: str) -> str:
     return value
 
 
+def _merge_responses_tool_outputs() -> None:
+    """Send one function_call_output per tool call on the Responses API.
+
+    The SDK emits one item per content part, so a tool result with several
+    text parts repeats its call_id; strict servers (OpenCode Go) reject that
+    with "Duplicate function_call_output". Remove once the SDK merges them.
+    """
+    from openhands.sdk.llm.utils import responses_serialization as rs
+
+    original = rs._tool_to_responses_items
+
+    def merged(message: Any, *, vision_enabled: bool) -> list[dict[str, Any]]:
+        items = original(message, vision_enabled=vision_enabled)
+        if len(items) <= 1:
+            return items
+        parts: list[dict[str, Any]] = []
+        for item in items:
+            output = item["output"]
+            if isinstance(output, str):
+                parts.append({"type": "input_text", "text": output})
+            else:
+                parts.extend(output)
+        if all(part["type"] == "input_text" for part in parts):
+            return [{**items[0], "output": "\n".join(p["text"] for p in parts)}]
+        return [{**items[0], "output": parts}]
+
+    rs._tool_to_responses_items = merged
+
+
 def _get_json_object_env(name: str) -> dict[str, Any]:
     raw = os.getenv(name, "")
     if not raw:
@@ -1128,6 +1157,7 @@ def create_conversation(
     if config["capability_overrides"]:
         llm_config["capability_overrides"] = config["capability_overrides"]
 
+    _merge_responses_tool_outputs()
     llm = LLM(**llm_config)
 
     tools = get_default_tools(enable_browser=False)
