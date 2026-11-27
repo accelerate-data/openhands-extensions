@@ -92,7 +92,7 @@ script_dir = Path(__file__).parent
 sys.path.insert(0, str(script_dir))
 
 from dedupe import repeated_comment_ids  # noqa: E402
-from verdict import review_event  # noqa: E402
+from verdict import relabel_unproven, review_event  # noqa: E402
 from prompt import FILE_REVIEWER_SKILL, format_prompt  # noqa: E402
 
 logger = get_logger(__name__)
@@ -1216,6 +1216,8 @@ def submit_verdict(
 ) -> str:
     """Approve the PR when this run's posted findings hold no Critical one; else keep the COMMENT review.
 
+    A Critical finding that quotes no reproducing command and its output is first edited to Important.
+
     Raises when the run posted no review, so a review that never happened fails the job.
     """
     repo = _get_required_env("REPO_NAME")
@@ -1237,9 +1239,19 @@ def submit_verdict(
         if c["id"] not in prior_comment_ids
         and (c.get("user") or {}).get("type") == "Bot"
     ]
-    event = review_event(
-        [r.get("body") for r in new_reviews] + [c.get("body") for c in new_comments]
-    )
+    edits = [(r, f"/repos/{repo}/pulls/{pr_number}/reviews/{r['id']}", "PUT") for r in new_reviews]
+    edits += [(c, f"/repos/{repo}/pulls/comments/{c['id']}", "PATCH") for c in new_comments]
+    bodies = []
+    for posted, url, method in edits:
+        body = relabel_unproven(posted.get("body"))
+        if body != posted.get("body"):  # an unproven Critical is posted as Important
+            logger.info(f"Relabelling an unproven Critical: {url}")
+            try:
+                _call_github_api(url, method=method, data={"body": body})
+            except RuntimeError as e:  # the review is posted; a failed edit must not fail it
+                logger.warning(f"Could not relabel {url}: {e}")
+        bodies.append(body)
+    event = review_event(bodies)
     logger.info(f"Review verdict: {event}")
     if event == "APPROVE":
         _call_github_api(
