@@ -92,7 +92,7 @@ script_dir = Path(__file__).parent
 sys.path.insert(0, str(script_dir))
 
 from dedupe import repeated_comment_ids  # noqa: E402
-from verdict import review_event  # noqa: E402
+from verdict import relabel_unproven, review_event  # noqa: E402
 from prompt import FILE_REVIEWER_SKILL, format_prompt  # noqa: E402
 
 logger = get_logger(__name__)
@@ -1216,6 +1216,8 @@ def submit_verdict(
 ) -> str:
     """Approve the PR when this run's posted findings hold no Critical one; else keep the COMMENT review.
 
+    A Critical finding that quotes no reproducing command and its output is first edited to Important.
+
     Raises when the run posted no review, so a review that never happened fails the job.
     """
     repo = _get_required_env("REPO_NAME")
@@ -1237,9 +1239,28 @@ def submit_verdict(
         if c["id"] not in prior_comment_ids
         and (c.get("user") or {}).get("type") == "Bot"
     ]
-    event = review_event(
-        [r.get("body") for r in new_reviews] + [c.get("body") for c in new_comments]
-    )
+    bodies = []
+    for review in new_reviews:
+        body = relabel_unproven(review.get("body"))
+        if body != review.get("body"):  # an unproven Critical is posted as Important
+            logger.info(f"Relabelling unproven Critical in review {review['id']}")
+            _call_github_api(
+                f"/repos/{repo}/pulls/{pr_number}/reviews/{review['id']}",
+                method="PUT",
+                data={"body": body},
+            )
+        bodies.append(body)
+    for comment in new_comments:
+        body = relabel_unproven(comment.get("body"))
+        if body != comment.get("body"):
+            logger.info(f"Relabelling unproven Critical in comment {comment['id']}")
+            _call_github_api(
+                f"/repos/{repo}/pulls/comments/{comment['id']}",
+                method="PATCH",
+                data={"body": body},
+            )
+        bodies.append(body)
+    event = review_event(bodies)
     logger.info(f"Review verdict: {event}")
     if event == "APPROVE":
         _call_github_api(
