@@ -14,13 +14,18 @@ CRITICAL_MARKER = "🔴"
 # mid-sentence ("the earlier 🔴 Critical no longer applies") is not a finding.
 _FINDING_LINE = re.compile(r"^[\s>*_\-+\d.]*" + CRITICAL_MARKER)
 _CRITICAL_LABEL = re.compile(r"🔴(\s*\**\s*)Critical")
-_FENCE = re.compile(r"^```[^\n]*\n(.*?)^```", re.M | re.S)
+# A ``` or ~~~ fence, indented or not (a proof under a list item), closed by the same marker.
+_FENCE = re.compile(r"^[ \t]*(```|~~~)[ \t]*([^\n]*)\n(.*?)^[ \t]*\1", re.M | re.S)
+# A suggestion or diff block quotes code, not a command's output.
+_NOT_OUTPUT = {"suggestion", "diff"}
 
 
 def _has_proof(body: str) -> bool:
-    """A fenced block holding a `$ ` command line and at least one line of its output."""
-    for block in _FENCE.findall(body):
-        lines = [line for line in block.splitlines() if line.strip()]
+    """A fenced block (not a suggestion or diff) holding a `$ ` command line and a line of its output."""
+    for _marker, info, block in _FENCE.findall(body):
+        if info.strip().split(" ")[0].lower() in _NOT_OUTPUT:
+            continue
+        lines = [line.strip() for line in block.splitlines() if line.strip()]
         if any(line.startswith("$ ") for line in lines) and any(
             not line.startswith("$ ") for line in lines
         ):

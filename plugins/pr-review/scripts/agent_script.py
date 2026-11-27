@@ -1239,26 +1239,17 @@ def submit_verdict(
         if c["id"] not in prior_comment_ids
         and (c.get("user") or {}).get("type") == "Bot"
     ]
+    edits = [(r, f"/repos/{repo}/pulls/{pr_number}/reviews/{r['id']}", "PUT") for r in new_reviews]
+    edits += [(c, f"/repos/{repo}/pulls/comments/{c['id']}", "PATCH") for c in new_comments]
     bodies = []
-    for review in new_reviews:
-        body = relabel_unproven(review.get("body"))
-        if body != review.get("body"):  # an unproven Critical is posted as Important
-            logger.info(f"Relabelling unproven Critical in review {review['id']}")
-            _call_github_api(
-                f"/repos/{repo}/pulls/{pr_number}/reviews/{review['id']}",
-                method="PUT",
-                data={"body": body},
-            )
-        bodies.append(body)
-    for comment in new_comments:
-        body = relabel_unproven(comment.get("body"))
-        if body != comment.get("body"):
-            logger.info(f"Relabelling unproven Critical in comment {comment['id']}")
-            _call_github_api(
-                f"/repos/{repo}/pulls/comments/{comment['id']}",
-                method="PATCH",
-                data={"body": body},
-            )
+    for posted, url, method in edits:
+        body = relabel_unproven(posted.get("body"))
+        if body != posted.get("body"):  # an unproven Critical is posted as Important
+            logger.info(f"Relabelling an unproven Critical: {url}")
+            try:
+                _call_github_api(url, method=method, data={"body": body})
+            except RuntimeError as e:  # the review is posted; a failed edit must not fail it
+                logger.warning(f"Could not relabel {url}: {e}")
         bodies.append(body)
     event = review_event(bodies)
     logger.info(f"Review verdict: {event}")

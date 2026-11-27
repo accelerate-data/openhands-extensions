@@ -81,3 +81,27 @@ def test_a_critical_mentioned_mid_sentence_is_left_alone():
 
 def test_an_empty_body_is_left_alone():
     assert relabel_unproven(None) is None
+
+
+def test_a_suggestion_block_is_not_proof():
+    body = "🔴 Critical: wrong.\n\n```suggestion\n$ run it\nfixed line\n```"
+    assert relabel_unproven(body).startswith("🟠 Important")
+
+
+def test_proof_indented_under_a_list_item_counts():
+    body = "- 🔴 Critical: f(1) returns None.\n\n  ```\n  $ python -c 'print(f(1))'\n  None\n  ```"
+    assert relabel_unproven(body) == body
+
+
+def test_a_tilde_fenced_proof_counts():
+    body = "🔴 Critical: it crashes.\n\n~~~console\n$ python -m m\nTraceback (most recent call last):\n~~~"
+    assert relabel_unproven(body) == body
+
+
+def test_a_dollar_line_outside_a_fence_is_not_proof():
+    body = "🔴 Critical: it crashes.\n$ python -m m\nTraceback"
+    assert relabel_unproven(body).startswith("🟠 Important")
+
+
+def test_a_bare_red_marker_without_the_word_is_relabelled():
+    assert relabel_unproven("🔴 x is broken.") == "🟠 x is broken."
