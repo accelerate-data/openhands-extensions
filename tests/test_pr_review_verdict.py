@@ -103,5 +103,25 @@ def test_a_dollar_line_outside_a_fence_is_not_proof():
     assert relabel_unproven(body).startswith("🟠 Important")
 
 
-def test_a_bare_red_marker_without_the_word_is_relabelled():
-    assert relabel_unproven("🔴 x is broken.") == "🟠 x is broken."
+def test_a_red_marker_wrapped_to_the_start_of_a_line_is_not_a_finding():
+    body = "🟠 Important: a later unproven Critical stays\n🔴. `review_event` then returns COMMENT."
+    assert relabel_unproven(body) == body
+    assert review_event([body]) == "APPROVE"
+
+
+def test_each_critical_in_a_review_body_needs_its_own_proof():
+    body = "- 🔴 Critical: a." + PROOF + "- 🔴 Critical: b, unproven."
+    relabelled = relabel_unproven(body)
+    assert relabelled.startswith("- 🔴 Critical: a.")
+    assert relabelled.endswith("- 🟠 Important: b, unproven.")
+    assert review_event([relabelled]) == "COMMENT"
+
+
+def test_a_heading_critical_withholds_approval():
+    assert review_event(["### 🔴 Critical: data loss." + PROOF]) == "COMMENT"
+
+
+def test_a_critical_quoted_inside_a_code_block_is_not_a_finding():
+    body = "🟠 Important: one proof covers both.\n\n```\n- 🔴 Critical: g() raises KeyError.\n```"
+    assert relabel_unproven(body) == body
+    assert review_event([body]) == "APPROVE"

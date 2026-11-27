@@ -10,14 +10,31 @@ from __future__ import annotations
 import re
 
 CRITICAL_MARKER = "🔴"
-# A finding opens with its priority label, after any list bullet, quote or bold markup; a 🔴 mentioned
-# mid-sentence ("the earlier 🔴 Critical no longer applies") is not a finding.
-_FINDING_LINE = re.compile(r"^[\s>*_\-+\d.]*" + CRITICAL_MARKER)
-_CRITICAL_LABEL = re.compile(r"🔴(\s*\**\s*)Critical")
+# A finding opens with its priority label "🔴 Critical", after any list bullet, quote, heading or bold
+# markup. A 🔴 mentioned mid-sentence ("the earlier 🔴 Critical no longer applies"), or one that a hard
+# wrap puts at the start of a line ("🔴. `review_event` then ..."), is not a finding.
+_FINDING_LINE = re.compile(r"^[\s>*_\-+#\d.]*" + CRITICAL_MARKER + r"[\s*_]*Critical")
+_CRITICAL_LABEL = re.compile(r"🔴([\s*_]*)Critical")
 # A ``` or ~~~ fence, indented or not (a proof under a list item), closed by the same marker.
 _FENCE = re.compile(r"^[ \t]*(```|~~~)[ \t]*([^\n]*)\n(.*?)^[ \t]*\1", re.M | re.S)
 # A suggestion or diff block quotes code, not a command's output.
 _NOT_OUTPUT = {"suggestion", "diff"}
+
+
+_FENCE_LINE = re.compile(r"^[ \t]*(```|~~~)")
+
+
+def _openers(lines: list[str]) -> list[int]:
+    """Indexes of the lines that open a 🔴 Critical finding, skipping lines inside a fenced block (a quoted
+    example or command output is not a finding)."""
+    openers, fence = [], None
+    for i, line in enumerate(lines):
+        mark = _FENCE_LINE.match(line)
+        if mark:
+            fence = None if fence == mark.group(1) else (fence or mark.group(1))
+        elif fence is None and _FINDING_LINE.match(line):
+            openers.append(i)
+    return openers
 
 
 def _has_proof(body: str) -> bool:
@@ -34,18 +51,19 @@ def _has_proof(body: str) -> bool:
 
 
 def relabel_unproven(body: str | None) -> str | None:
-    """The body with each line that opens a 🔴 Critical finding relabelled 🟠 Important, unless the body
-    quotes a reproducing command and its output (a fenced block with a `$ ` line and an output line).
+    """The body with each 🔴 Critical finding that quotes no reproducing command and its output (a fenced
+    block with a `$ ` line and an output line) relabelled 🟠 Important.
 
-    One body is one finding (an inline comment); a review body listing several shares one proof.
+    A finding runs from its opening line to the next finding's, so each Critical finding in a review body
+    needs its own proof.
     """
-    if not body or _has_proof(body):
+    if not body:
         return body
     lines = body.split("\n")
-    for i, line in enumerate(lines):
-        if _FINDING_LINE.match(line):
-            relabelled = _CRITICAL_LABEL.sub(r"🟠\1Important", line, count=1)
-            lines[i] = relabelled if relabelled != line else line.replace(CRITICAL_MARKER, "🟠", 1)
+    openers = _openers(lines)
+    for start, end in zip(openers, openers[1:] + [len(lines)]):
+        if not _has_proof("\n".join(lines[start:end])):
+            lines[start] = _CRITICAL_LABEL.sub(r"🟠\1Important", lines[start], count=1)
     return "\n".join(lines)
 
 
@@ -53,6 +71,6 @@ def review_event(bodies: list[str | None]) -> str:
     """`APPROVE` when no line of a posted body (review body or kept inline comment) opens a 🔴 Critical
     finding, else `COMMENT`. Never `REQUEST_CHANGES`."""
     for body in bodies:
-        if any(_FINDING_LINE.match(line) for line in (body or "").splitlines()):
+        if _openers((body or "").split("\n")):
             return "COMMENT"
     return "APPROVE"
