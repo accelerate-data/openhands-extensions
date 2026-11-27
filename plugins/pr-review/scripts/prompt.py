@@ -34,12 +34,12 @@ Pay attention to:
 
 {review_context}
 
-When reviewing, consider:
-1. Don't repeat comments that have already been made and are still relevant
-2. If an issue is still unresolved in the code, you may reference it
-3. If resolved, don't bring it up unless the fix introduced new problems
-4. Focus on NEW issues in the current diff that haven't been discussed yet
-5. Never approve while a concrete human concern remains unverified
+When reviewing:
+1. Never raise a finding that any thread above already raises, resolved or not,
+   even reworded or on a moved line. The author has seen it; a repeat is noise.
+2. If resolved, don't bring it up unless the fix introduced a new, different problem
+3. Report only NEW issues in the current diff that no thread above discusses
+4. If every issue you found is already above, post a short COMMENT review saying so
 """
 
 _EVIDENCE_REQUIREMENT_SECTION = """
@@ -95,8 +95,15 @@ changed file in isolation.
 Post a finding only when you can state a concrete failure on the current head
 and cite the code, acceptance criterion, or repository rule that proves it.
 Optional refactors, style preferences, speculative hardening, and requests for
-more tests without an unverified behavior are not findings. If no material
-finding remains, approve when the active repository instructions permit it.
+more tests without an unverified behavior are not findings.
+
+Read `CODING_STANDARDS.md` at the repository root when present. Its rules are binding review criteria: apply each one, and do not raise findings it rules out of scope.
+
+## Review Rules
+
+- **Cite evidence for every finding.** Each finding names the file and line and quotes the code it is about. A claim about how a tool, library or service behaves (dbt, Databricks, GitHub, ...) must also cite the source you checked: a file in the workspace, documentation, or command output. If you cannot cite evidence, drop the finding.
+- **Post with `"event": "COMMENT"` only.** Never use `REQUEST_CHANGES` or `APPROVE`. Mark every blocking finding 🔴 Critical. After you post, the workflow approves the PR itself when no posted finding is 🔴 Critical.
+- **Prove every 🔴 Critical finding.** Before you mark a finding Critical, run a command in the workspace that reproduces it, and quote the command and its output in a fenced block, with the command on a line starting `$ `. A Critical finding without that proof is relabelled 🟠 Important after you post. If you cannot reproduce it in the workspace, raise it as Important.
 
 Review the PR changes below and identify issues that need to be addressed.
 
